@@ -3,75 +3,85 @@ from ultralytics import YOLO
 import tempfile
 import os
 import glob
-import gc
 
 st.set_page_config(
-    page_title="AI Pothole Detection",
-    layout="wide"
+    page_title="Pothole Detection",
+    layout="centered"
 )
 
 st.title("AI Based Pothole Detection System")
 
-st.write("Upload one road video")
+st.write("Upload a road video for pothole detection")
 
+# Load model once
 @st.cache_resource
 def load_model():
-    return YOLO("best.pt")
+    model = YOLO("best.pt")
+    return model
 
 model = load_model()
 
 uploaded_file = st.file_uploader(
-    "Upload Video",
-    type=["mp4","avi","mov"]
+    "Choose Video",
+    type=["mp4", "avi", "mov"]
 )
 
-if uploaded_file:
+if uploaded_file is not None:
 
-    st.subheader(uploaded_file.name)
+    st.video(uploaded_file)
 
-    temp_input = tempfile.NamedTemporaryFile(
+    # Save uploaded file temporarily
+    temp_file = tempfile.NamedTemporaryFile(
         delete=False,
         suffix=".mp4"
     )
 
-    temp_input.write(
-        uploaded_file.read()
-    )
+    temp_file.write(uploaded_file.read())
+    temp_file.close()
 
-    temp_input.close()
+    st.info("Processing video... Please wait")
 
-    with st.spinner("Detecting potholes..."):
+    try:
 
+        # Run prediction
         results = model.predict(
-            source=temp_input.name,
+            source=temp_file.name,
             save=True,
             imgsz=320,
-            conf=0.5
+            conf=0.4
         )
 
-    save_dir = str(results[0].save_dir)
+        save_dir = str(results[0].save_dir)
 
-    videos = (
-        glob.glob(save_dir+"/*.mp4")
-        + glob.glob(save_dir+"/*.avi")
-    )
+        # Find generated video
+        output_videos = glob.glob(
+            os.path.join(save_dir, "*.avi")
+        )
 
-    if videos:
+        output_videos += glob.glob(
+            os.path.join(save_dir, "*.mp4")
+        )
 
-        output = videos[0]
+        if len(output_videos) > 0:
 
-        st.success("Detection completed")
+            output_video = output_videos[0]
 
-        st.video(output)
+            st.success("Detection Completed")
 
-        with open(output,"rb") as f:
+            st.video(output_video)
 
-            st.download_button(
-                "Download Result",
-                data=f,
-                file_name="detected_video.mp4"
-            )
+            with open(output_video, "rb") as file:
 
-    # Cleanup memory
-    os.remove(temp_input.name)
-    gc.collect()
+                st.download_button(
+                    label="Download Result",
+                    data=file,
+                    file_name="detected_video.mp4"
+                )
+
+        else:
+
+            st.error("Output video not generated")
+
+    except Exception as e:
+
+        st.error(f"Error: {e}")
