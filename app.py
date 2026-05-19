@@ -1,87 +1,48 @@
 import streamlit as st
 from ultralytics import YOLO
+from PIL import Image
 import tempfile
-import os
-import glob
 
-st.set_page_config(
-    page_title="Pothole Detection",
-    layout="centered"
-)
+st.set_page_config(page_title="AI Pothole Detection")
 
 st.title("AI Based Pothole Detection System")
+st.write("Upload a road image")
 
-st.write("Upload a road video for pothole detection")
-
-# Load model once
 @st.cache_resource
 def load_model():
-    model = YOLO("best.pt")
-    return model
+    return YOLO("best.pt")
 
 model = load_model()
 
-uploaded_file = st.file_uploader(
-    "Choose Video",
-    type=["mp4", "avi", "mov"]
+uploaded = st.file_uploader(
+    "Upload image",
+    type=["jpg", "jpeg", "png"]
 )
 
-if uploaded_file is not None:
+if uploaded:
 
-    st.video(uploaded_file)
+    image = Image.open(uploaded)
 
-    # Save uploaded file temporarily
-    temp_file = tempfile.NamedTemporaryFile(
-        delete=False,
-        suffix=".mp4"
+    st.image(
+        image,
+        caption="Uploaded Image"
     )
 
-    temp_file.write(uploaded_file.read())
-    temp_file.close()
+    with tempfile.NamedTemporaryFile(
+        delete=False,
+        suffix=".jpg"
+    ) as tmp:
 
-    st.info("Processing video... Please wait")
+        image.save(tmp.name)
 
-    try:
-
-        # Run prediction
-        results = model.predict(
-            source=temp_file.name,
-            save=True,
-            imgsz=320,
-            conf=0.4
+        result = model.predict(
+            source=tmp.name,
+            save=False
         )
 
-        save_dir = str(results[0].save_dir)
+    plotted = result[0].plot()
 
-        # Find generated video
-        output_videos = glob.glob(
-            os.path.join(save_dir, "*.avi")
-        )
-
-        output_videos += glob.glob(
-            os.path.join(save_dir, "*.mp4")
-        )
-
-        if len(output_videos) > 0:
-
-            output_video = output_videos[0]
-
-            st.success("Detection Completed")
-
-            st.video(output_video)
-
-            with open(output_video, "rb") as file:
-
-                st.download_button(
-                    label="Download Result",
-                    data=file,
-                    file_name="detected_video.mp4"
-                )
-
-        else:
-
-            st.error("Output video not generated")
-
-    except Exception as e:
-
-        st.error(f"Error: {e}")
+    st.image(
+        plotted,
+        caption="Detection Result"
+    )
