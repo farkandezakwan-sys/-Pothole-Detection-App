@@ -1,38 +1,43 @@
 import streamlit as st
 from ultralytics import YOLO
+from PIL import Image
 import tempfile
 import os
 
-st.set_page_config(page_title="AI Pothole Detection")
-
 st.title("AI Based Pothole Detection System")
-st.write("Upload a road image for pothole detection")
+
+if not os.path.exists("best (2).pt"):
+    st.error("best (2).pt model file not found")
+    st.stop()
 
 @st.cache_resource
 def load_model():
-    return YOLO("best.pt")
+    return YOLO("best (2).pt")
 
 model = load_model()
 
-uploaded_file = st.file_uploader(
+uploaded = st.file_uploader(
     "Upload Image",
     type=["jpg","jpeg","png"]
 )
 
-if uploaded_file is not None:
+if uploaded:
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
-        tmp.write(uploaded_file.read())
-        temp_path = tmp.name
+    image = Image.open(uploaded)
 
-    results = model.predict(temp_path)
+    with tempfile.NamedTemporaryFile(
+        delete=False,
+        suffix=".jpg"
+    ) as tmp:
 
-    result_image = results[0].plot()
+        image.save(tmp.name)
+
+        results = model.predict(tmp.name)
+
+    result = results[0].plot()
 
     st.image(
-        result_image,
+        result,
         caption="Detection Result",
         use_container_width=True
     )
-
-    os.remove(temp_path)
