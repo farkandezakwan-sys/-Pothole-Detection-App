@@ -1,7 +1,7 @@
-
 import streamlit as st
 from ultralytics import YOLO
 import tempfile
+import os
 import glob
 
 st.set_page_config(
@@ -13,7 +13,11 @@ st.title("AI Based Pothole Detection System")
 
 st.write("Upload one or multiple road videos")
 
-model = YOLO("best.pt")
+@st.cache_resource
+def load_model():
+    return YOLO("best.pt")
+
+model = load_model()
 
 uploaded_files = st.file_uploader(
     "Upload Videos",
@@ -27,38 +31,49 @@ if uploaded_files:
 
         st.subheader(uploaded_file.name)
 
-        temp_input = tempfile.NamedTemporaryFile(
+        # Save uploaded file
+        temp_file = tempfile.NamedTemporaryFile(
             delete=False,
             suffix=".mp4"
         )
 
-        temp_input.write(
-            uploaded_file.read()
-        )
+        temp_file.write(uploaded_file.read())
+        temp_file.close()
 
-        temp_input.close()
+        with st.spinner("Detecting potholes..."):
 
-        results = model.predict(
-            source=temp_input.name,
-            save=True,
-            conf=0.5
-        )
+            results = model.predict(
+                source=temp_file.name,
+                save=True,
+                conf=0.5
+            )
 
+        # Get save directory from YOLO
         save_dir = str(results[0].save_dir)
 
-        videos = glob.glob(save_dir+"/*.mp4")
-        videos += glob.glob(save_dir+"/*.avi")
+        # Search output videos
+        output_files = (
+            glob.glob(os.path.join(save_dir,"*.mp4"))
+            + glob.glob(os.path.join(save_dir,"*.avi"))
+            + glob.glob(os.path.join(save_dir,"*.mov"))
+        )
 
-        if videos:
+        if output_files:
 
-            output_video = videos[0]
+            output_video = output_files[0]
+
+            st.success("Detection completed")
 
             st.video(output_video)
 
-            with open(output_video,"rb") as file:
+            with open(output_video,"rb") as f:
 
                 st.download_button(
-                    label="Download Result",
-                    data=file,
+                    "Download Result",
+                    f,
                     file_name="detected_"+uploaded_file.name
                 )
+
+        else:
+
+            st.error("No output video generated")
